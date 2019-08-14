@@ -195,7 +195,12 @@ class AV1Convolve2DTest : public ::testing::TestWithParam<Convolve2DParam> {
                                    "index "
                                 << idx << " = (" << j << ", " << i
                                 << "), sub pixel offset = (" << suby << ", "
-                                << subx << ")";
+                                << subx << ")"
+                                << " tap = ("
+                                << get_convolve_tap(filter_params_x->filter_ptr)
+                                << "x"
+                                << get_convolve_tap(filter_params_y->filter_ptr)
+                                << ")";
                         }
                     }
                 }
@@ -208,7 +213,12 @@ class AV1Convolve2DTest : public ::testing::TestWithParam<Convolve2DParam> {
                                 << output_w << "x" << output_h
                                 << " Pixel mismatch at index " << idx << " = ("
                                 << j << ", " << i << "), sub pixel offset = ("
-                                << suby << ", " << subx << ")";
+                                << suby << ", " << subx << ")"
+                                << " tap = ("
+                                << get_convolve_tap(filter_params_x->filter_ptr)
+                                << "x"
+                                << get_convolve_tap(filter_params_y->filter_ptr)
+                                << ")";
                         }
                     }
                 }
@@ -442,6 +452,12 @@ class AV1Convolve2DTest : public ::testing::TestWithParam<Convolve2DParam> {
                 InterpFilterParams filter_params_y =
                     av1_get_interp_filter_params_with_block_size(
                         (InterpFilter)vfilter, output_h);
+                const int32_t h_tap =
+                    get_convolve_tap(filter_params_x.filter_ptr);
+                const int32_t v_tap =
+                    get_convolve_tap(filter_params_y.filter_ptr);
+                if (h_tap != v_tap)
+                    continue;
                 // setup convolveParams according to jnt or sr
                 ConvolveParams conv_params_ref;
                 ConvolveParams conv_params_tst;

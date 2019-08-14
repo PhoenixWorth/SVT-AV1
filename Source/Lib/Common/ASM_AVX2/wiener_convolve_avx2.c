@@ -169,8 +169,8 @@ void eb_av1_wiener_convolve_add_src_avx2(const uint8_t *src, ptrdiff_t src_strid
                 s[3] = _mm256_unpacklo_epi16(s6, s7);
                 s[7] = _mm256_unpackhi_epi16(s6, s7);
 
-                __m256i res_a = convolve_8tap(s, coeffs_v);
-                __m256i res_b = convolve_8tap(s + 4, coeffs_v);
+                __m256i res_a = convolve16_8tap_avx2(s, coeffs_v);
+                __m256i res_b = convolve16_8tap_avx2(s + 4, coeffs_v);
 
                 const __m256i res_a_round = _mm256_sra_epi32(
                     _mm256_add_epi32(res_a, round_const_v), round_shift_v);
@@ -214,7 +214,7 @@ void eb_av1_wiener_convolve_add_src_avx2(const uint8_t *src, ptrdiff_t src_strid
                 __m128i s7 = _mm_unpackhi_epi16(s6_, s7_);
 
                 s[3] = _mm256_inserti128_si256(_mm256_castsi128_si256(s3), s7, 1);
-                __m256i convolveres = convolve_8tap(s, coeffs_v);
+                __m256i convolveres = convolve16_8tap_avx2(s, coeffs_v);
 
                 const __m256i res_round = _mm256_sra_epi32(
                     _mm256_add_epi32(convolveres, round_const_v), round_shift_v);

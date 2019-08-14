@@ -328,6 +328,67 @@ void eb_av1_convolve_2d_sr_c(const uint8_t *src, int32_t src_stride, uint8_t *ds
     }
 }
 
+#if 0
+// Note: Don't delete! This is the code base for optimizations, which is simpler
+//       and bit-exact with the above original C version.
+void eb_av1_convolve_2d_sr_base(const uint8_t *src, int32_t src_stride,
+    uint8_t *dst, int32_t dst_stride, int32_t w,
+    int32_t h, InterpFilterParams *filter_params_x,
+    InterpFilterParams *filter_params_y,
+    const int32_t subpel_x_q4,
+    const int32_t subpel_y_q4,
+    ConvolveParams *conv_params) {
+    int32_t y;
+    int16_t *im;
+    int16_t im_block[(MAX_SB_SIZE + MAX_FILTER_TAP - 1) * MAX_SB_SIZE];
+
+    assert(conv_params->round_0 == 3);
+    assert(conv_params->round_1 == 11);
+
+    (void)conv_params;
+
+    // horizontal filter
+    const uint8_t *s = src - 3 * src_stride - 3;
+    const int16_t *const x_filter = av1_get_interp_filter_subpel_kernel(
+        *filter_params_x, subpel_x_q4 & SUBPEL_MASK);
+
+    im = im_block;
+    y = h + 7;
+    do {
+        int32_t x = 0;
+        do {
+            int32_t sum = 0;
+            for (int32_t k = 0; k < 8; ++k)
+                sum += x_filter[k] * s[x + k];
+            im[x] = (int16_t)ROUND_POWER_OF_TWO(sum, 3);
+        } while (++x < w);
+
+        s += src_stride;
+        im += w;
+    } while (--y);
+
+    // vertical filter
+    const int16_t *const y_filter = av1_get_interp_filter_subpel_kernel(
+        *filter_params_y, subpel_y_q4 & SUBPEL_MASK);
+
+    im = im_block;
+    y = h;
+    do {
+        int32_t x = 0;
+        do {
+            int32_t sum = 0;
+            for (int32_t k = 0; k < 8; ++k)
+                sum += y_filter[k] * im[k * w + x];
+            const int16_t res = (ConvBufType)(ROUND_POWER_OF_TWO(sum, 11));
+            dst[x] = (uint8_t)clip_pixel_highbd(res, 8);
+        } while (++x < w);
+
+        im += w;
+        dst += dst_stride;
+    } while (--y);
+}
+#endif
+
 void eb_av1_convolve_y_sr_c(const uint8_t *src, int32_t src_stride, uint8_t *dst,
     int32_t dst_stride, int32_t w, int32_t h,
     InterpFilterParams *filter_params_x,

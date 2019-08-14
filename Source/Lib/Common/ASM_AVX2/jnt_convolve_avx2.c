@@ -29,12 +29,12 @@
         s[0] = _mm256_unpacklo_epi16(s4, s5);                                        \
         s[1] = _mm256_unpackhi_epi16(s4, s5);                                        \
                                                                                      \
-        const __m256i res_a = convolve_2tap(s, coeffs_v);                            \
+        const __m256i res_a = convolve16_2tap_avx2(s, coeffs_v);                     \
         const __m256i res_a_round = _mm256_sra_epi32(                                \
             _mm256_add_epi32(res_a, round_const_v), round_shift_v);                  \
                                                                                      \
         if (w - j > 4) {                                                             \
-            const __m256i res_b = convolve_2tap(s + 1, coeffs_v);                    \
+            const __m256i res_b = convolve16_2tap_avx2(s + 1, coeffs_v);             \
             const __m256i res_b_round = _mm256_sra_epi32(                            \
                 _mm256_add_epi32(res_b, round_const_v), round_shift_v);              \
             const __m256i res_16b = _mm256_packs_epi32(res_a_round, res_b_round);    \
@@ -129,12 +129,12 @@
         s[2] = _mm256_unpacklo_epi16(s4, s5);                                        \
         s[5] = _mm256_unpackhi_epi16(s4, s5);                                        \
                                                                                      \
-        const __m256i res_a = convolve_4tap(s, coeffs_v + 1);                        \
+        const __m256i res_a = convolve16_4tap_avx2(s, coeffs_v + 1);                 \
         const __m256i res_a_round = _mm256_sra_epi32(                                \
             _mm256_add_epi32(res_a, round_const_v), round_shift_v);                  \
                                                                                      \
         if (w - j > 4) {                                                             \
-            const __m256i res_b = convolve_4tap(s + 3, coeffs_v + 1);                \
+            const __m256i res_b = convolve16_4tap_avx2(s + 3, coeffs_v + 1);         \
             const __m256i res_b_round = _mm256_sra_epi32(                            \
                 _mm256_add_epi32(res_b, round_const_v), round_shift_v);              \
             const __m256i res_16b = _mm256_packs_epi32(res_a_round, res_b_round);    \
@@ -235,12 +235,12 @@
     s[3] = _mm256_unpacklo_epi16(s6, s7);                                      \
     s[7] = _mm256_unpackhi_epi16(s6, s7);                                      \
                                                                                \
-    const __m256i res_a = convolve_8tap(s, coeffs_v);                          \
+    const __m256i res_a = convolve16_8tap_avx2(s, coeffs_v);                   \
     const __m256i res_a_round = _mm256_sra_epi32(                              \
         _mm256_add_epi32(res_a, round_const_v), round_shift_v);                \
                                                                                \
     if (w - j > 4) {                                                           \
-      const __m256i res_b = convolve_8tap(s + 4, coeffs_v);                    \
+      const __m256i res_b = convolve16_8tap_avx2(s + 4, coeffs_v);             \
       const __m256i res_b_round = _mm256_sra_epi32(                            \
           _mm256_add_epi32(res_b, round_const_v), round_shift_v);              \
       const __m256i res_16b = _mm256_packs_epi32(res_a_round, res_b_round);    \
@@ -375,7 +375,7 @@ void eb_av1_jnt_convolve_x_avx2(const uint8_t *src, int32_t src_stride,
                 const __m256i data =
                     load_line2_avx2(&src_data[j], &src_data[j + src_stride]);
 
-                __m256i res = convolve_x_2tap(data, coeffs, filt);
+                __m256i res = convolve_x_2tap_avx2(data, coeffs, filt);
                 res = _mm256_sra_epi16(_mm256_add_epi16(res, round_const), round_shift);
                 res = _mm256_slli_epi16(res, bits);
 
@@ -431,7 +431,7 @@ void eb_av1_jnt_convolve_x_avx2(const uint8_t *src, int32_t src_stride,
                 const __m256i data =
                     load_line2_avx2(&src_data[j], &src_data[j + src_stride]);
 
-                __m256i res = convolve_x_4tap(data, coeffs + 1, filt);
+                __m256i res = convolve_x_4tap_avx2(data, coeffs + 1, filt);
                 res = _mm256_sra_epi16(_mm256_add_epi16(res, round_const), round_shift);
                 res = _mm256_slli_epi16(res, bits);
 
