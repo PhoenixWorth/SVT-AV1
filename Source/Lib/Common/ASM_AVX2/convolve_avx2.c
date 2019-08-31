@@ -18,6 +18,88 @@
 #include "EbMemory_AVX2.h"
 #include "synonyms.h"
 
+SIMD_INLINE __m128i convolve_x_round_sse2(const __m128i src) {
+    const __m128i round = _mm_set1_epi16(34);
+    const __m128i dst = _mm_add_epi16(src, round);
+    return _mm_srai_epi16(dst, 6);
+}
+
+SIMD_INLINE __m128i convolve_y_round_sse2(const __m128i src) {
+    const __m128i round = _mm_set1_epi16(32);
+    const __m128i dst = _mm_add_epi16(src, round);
+    return _mm_srai_epi16(dst, FILTER_BITS - 1);
+}
+
+SIMD_INLINE void sr_x_8x2_avx2(const __m256i res, uint8_t *const dst,
+    const int32_t dst_stride) {
+    const __m256i r = convolve_x_round_avx2(res);
+    convolve_store_8x2_avx2(r, dst, dst_stride);
+}
+
+SIMD_INLINE void sr_x_16x2_avx2(const __m256i res[2], uint8_t *const dst,
+    const int32_t dst_stride) {
+    __m256i r[2];
+
+    r[0] = convolve_x_round_avx2(res[0]);
+    r[1] = convolve_x_round_avx2(res[1]);
+    convolve_store_16x2_avx2(r[0], r[1], dst, dst_stride);
+}
+
+SIMD_INLINE void sr_x_32_avx2(const __m256i res[2], uint8_t *const dst) {
+    __m256i r[2];
+
+    r[0] = convolve_x_round_avx2(res[0]);
+    r[1] = convolve_x_round_avx2(res[1]);
+    convolve_store_32_avx2(r[0], r[1], dst);
+}
+
+SIMD_INLINE void sr_y_8x2_avx2(const __m256i res, uint8_t *const dst,
+    const int32_t dst_stride) {
+    const __m256i r = convolve_y_round_avx2(res);
+    convolve_store_8x2_avx2(r, dst, dst_stride);
+}
+
+SIMD_INLINE void sr_y_16x2_avx2(const __m256i res[2], uint8_t *const dst,
+    const int32_t dst_stride) {
+    __m256i r[2];
+
+    r[0] = convolve_y_round_avx2(res[0]);
+    r[1] = convolve_y_round_avx2(res[1]);
+    convolve_store_16x2_avx2(r[0], r[1], dst, dst_stride);
+}
+
+SIMD_INLINE void sr_y_32_avx2(const __m256i res[2], uint8_t *const dst) {
+    __m256i r[2];
+
+    r[0] = convolve_y_round_avx2(res[0]);
+    r[1] = convolve_y_round_avx2(res[1]);
+    convolve_store_32_avx2(r[0], r[1], dst);
+}
+
+SIMD_INLINE void sr_y_32x2_avx2(const __m256i res[2], uint8_t *const dst,
+    const int32_t dst_stride) {
+    sr_y_32_avx2(res, dst);
+    sr_y_32_avx2(res + 2, dst + dst_stride);
+}
+
+SIMD_INLINE void convolve_y_2tap_32_avx2(const uint8_t *const src,
+    const __m256i coeffs[1],
+    const __m256i s0, __m256i *const s1,
+    uint8_t *const dst) {
+    __m256i r[2];
+    convolve_y_2tap_32_kernel_avx2(src, coeffs, s0, s1, r);
+    sr_y_32_avx2(r, dst);
+}
+
+SIMD_INLINE void convolve_y_2tap_32_avg_avx2(const uint8_t *const src,
+    const __m256i s0,
+    __m256i *const s1,
+    uint8_t *const dst) {
+    *s1 = _mm256_loadu_si256((__m256i *)src);
+    const __m256i d = _mm256_avg_epu8(s0, *s1);
+    _mm256_storeu_si256((__m256i *)dst, d);
+}
+
 void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
     uint8_t *dst, int32_t dst_stride, int32_t w,
     int32_t h, InterpFilterParams *filter_params_x,
@@ -114,11 +196,12 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
 
                 if (w == 16) {
                     __m128i s_128[2];
-                    __m256i r[2];
 
                     s_128[0] = _mm_loadu_si128((__m128i *)src_ptr);
 
                     do {
+                        __m256i r[2];
+
                         convolve_y_2tap_16x2_avx2(
                             src_ptr, src_stride, coeffs_256, s_128, r);
                         sr_y_16x2_avx2(r, dst, dst_stride);
@@ -134,9 +217,15 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
 
                     do {
                         convolve_y_2tap_32_avx2(src_ptr + src_stride,
-                            coeffs_256, s_256[0], &s_256[1], dst);
+                            coeffs_256,
+                            s_256[0],
+                            &s_256[1],
+                            dst);
                         convolve_y_2tap_32_avx2(src_ptr + 2 * src_stride,
-                            coeffs_256, s_256[1], &s_256[0], dst + dst_stride);
+                            coeffs_256,
+                            s_256[1],
+                            &s_256[0],
+                            dst + dst_stride);
                         src_ptr += 2 * src_stride;
                         dst += 2 * dst_stride;
                         y -= 2;
@@ -152,11 +241,19 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
 
                     do {
                         convolve_y_2tap_32_avx2(src_ptr + src_stride,
-                            coeffs_256, s_256[0][0], &s_256[1][0], dst);
+                            coeffs_256,
+                            s_256[0][0],
+                            &s_256[1][0],
+                            dst);
                         convolve_y_2tap_32_avx2(src_ptr + src_stride + 32,
-                            coeffs_256, s_256[0][1], &s_256[1][1], dst + 32);
+                            coeffs_256,
+                            s_256[0][1],
+                            &s_256[1][1],
+                            dst + 32);
                         convolve_y_2tap_32_avx2(src_ptr + 2 * src_stride,
-                            coeffs_256, s_256[1][0], &s_256[0][0],
+                            coeffs_256,
+                            s_256[1][0],
+                            &s_256[0][0],
                             dst + dst_stride);
                         convolve_y_2tap_32_avx2(src_ptr + 2 * src_stride + 32,
                             coeffs_256,
@@ -184,29 +281,48 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
                         _mm256_loadu_si256((__m256i *)(src_ptr + 3 * 32));
 
                     do {
-                        convolve_y_2tap_32_avx2(src_ptr + src_stride,coeffs_256,
-                            s_256[0][0], &s_256[1][0], dst);
-                        convolve_y_2tap_32_avx2(src_ptr + src_stride + 1 * 32,coeffs_256,
-                            s_256[0][1], &s_256[1][1], dst + 1 * 32);
-                        convolve_y_2tap_32_avx2(src_ptr + src_stride + 2 * 32,coeffs_256,
-                            s_256[0][2], &s_256[1][2], dst + 2 * 32);
-                        convolve_y_2tap_32_avx2(src_ptr + src_stride + 3 * 32,coeffs_256,
-                            s_256[0][3], &s_256[1][3], dst + 3 * 32);
+                        convolve_y_2tap_32_avx2(src_ptr + src_stride,
+                            coeffs_256,
+                            s_256[0][0],
+                            &s_256[1][0],
+                            dst);
+                        convolve_y_2tap_32_avx2(src_ptr + src_stride + 1 * 32,
+                            coeffs_256,
+                            s_256[0][1],
+                            &s_256[1][1],
+                            dst + 1 * 32);
+                        convolve_y_2tap_32_avx2(src_ptr + src_stride + 2 * 32,
+                            coeffs_256,
+                            s_256[0][2],
+                            &s_256[1][2],
+                            dst + 2 * 32);
+                        convolve_y_2tap_32_avx2(src_ptr + src_stride + 3 * 32,
+                            coeffs_256,
+                            s_256[0][3],
+                            &s_256[1][3],
+                            dst + 3 * 32);
 
                         convolve_y_2tap_32_avx2(src_ptr + 2 * src_stride,
-                            coeffs_256, s_256[1][0],
+                            coeffs_256,
+                            s_256[1][0],
                             &s_256[0][0],
                             dst + dst_stride);
-                        convolve_y_2tap_32_avx2(src_ptr + 2 * src_stride + 1 * 32,
-                            coeffs_256, s_256[1][1],
+                        convolve_y_2tap_32_avx2(
+                            src_ptr + 2 * src_stride + 1 * 32,
+                            coeffs_256,
+                            s_256[1][1],
                             &s_256[0][1],
                             dst + dst_stride + 1 * 32);
-                        convolve_y_2tap_32_avx2(src_ptr + 2 * src_stride + 2 * 32,
-                            coeffs_256, s_256[1][2],
+                        convolve_y_2tap_32_avx2(
+                            src_ptr + 2 * src_stride + 2 * 32,
+                            coeffs_256,
+                            s_256[1][2],
                             &s_256[0][2],
                             dst + dst_stride + 2 * 32);
-                        convolve_y_2tap_32_avx2(src_ptr + 2 * src_stride + 3 * 32,
-                            coeffs_256, s_256[1][3],
+                        convolve_y_2tap_32_avx2(
+                            src_ptr + 2 * src_stride + 3 * 32,
+                            coeffs_256,
+                            s_256[1][3],
                             &s_256[0][3],
                             dst + dst_stride + 3 * 32);
 
@@ -307,9 +423,12 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
                 s_256[0] = _mm256_loadu_si256((__m256i *)src_ptr);
 
                 do {
-                    convolve_y_2tap_32_avg_avx2(src_ptr + src_stride, s_256[0], &s_256[1], dst);
+                    convolve_y_2tap_32_avg_avx2(
+                        src_ptr + src_stride, s_256[0], &s_256[1], dst);
                     convolve_y_2tap_32_avg_avx2(src_ptr + 2 * src_stride,
-                        s_256[1], &s_256[0], dst + dst_stride);
+                        s_256[1],
+                        &s_256[0],
+                        dst + dst_stride);
                     src_ptr += 2 * src_stride;
                     dst += 2 * dst_stride;
                     y -= 2;
@@ -322,13 +441,21 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
                 s_256[0][1] = _mm256_loadu_si256((__m256i *)(src_ptr + 1 * 32));
 
                 do {
-                    convolve_y_2tap_32_avg_avx2(src_ptr + src_stride, s_256[0][0], &s_256[1][0], dst);
-                    convolve_y_2tap_32_avg_avx2(src_ptr + src_stride + 32, s_256[0][1], &s_256[1][1], dst + 32);
+                    convolve_y_2tap_32_avg_avx2(
+                        src_ptr + src_stride, s_256[0][0], &s_256[1][0], dst);
+                    convolve_y_2tap_32_avg_avx2(src_ptr + src_stride + 32,
+                        s_256[0][1],
+                        &s_256[1][1],
+                        dst + 32);
 
                     convolve_y_2tap_32_avg_avx2(src_ptr + 2 * src_stride,
-                        s_256[1][0], &s_256[0][0], dst + dst_stride);
+                        s_256[1][0],
+                        &s_256[0][0],
+                        dst + dst_stride);
                     convolve_y_2tap_32_avg_avx2(src_ptr + 2 * src_stride + 32,
-                        s_256[1][1], &s_256[0][1], dst + dst_stride + 32);
+                        s_256[1][1],
+                        &s_256[0][1],
+                        dst + dst_stride + 32);
 
                     src_ptr += 2 * src_stride;
                     dst += 2 * dst_stride;
@@ -346,22 +473,40 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
                 s_256[0][3] = _mm256_loadu_si256((__m256i *)(src_ptr + 3 * 32));
 
                 do {
-                    convolve_y_2tap_32_avg_avx2(src_ptr + src_stride, s_256[0][0], &s_256[1][0], dst);
+                    convolve_y_2tap_32_avg_avx2(
+                        src_ptr + src_stride, s_256[0][0], &s_256[1][0], dst);
                     convolve_y_2tap_32_avg_avx2(src_ptr + src_stride + 1 * 32,
-                        s_256[0][1], &s_256[1][1], dst + 1 * 32);
+                        s_256[0][1],
+                        &s_256[1][1],
+                        dst + 1 * 32);
                     convolve_y_2tap_32_avg_avx2(src_ptr + src_stride + 2 * 32,
-                        s_256[0][2], &s_256[1][2], dst + 2 * 32);
+                        s_256[0][2],
+                        &s_256[1][2],
+                        dst + 2 * 32);
                     convolve_y_2tap_32_avg_avx2(src_ptr + src_stride + 3 * 32,
-                        s_256[0][3], &s_256[1][3], dst + 3 * 32);
+                        s_256[0][3],
+                        &s_256[1][3],
+                        dst + 3 * 32);
 
                     convolve_y_2tap_32_avg_avx2(src_ptr + 2 * src_stride,
-                        s_256[1][0], &s_256[0][0], dst + dst_stride);
-                    convolve_y_2tap_32_avg_avx2(src_ptr + 2 * src_stride + 1 * 32,
-                        s_256[1][1], &s_256[0][1], dst + dst_stride + 1 * 32);
-                    convolve_y_2tap_32_avg_avx2(src_ptr + 2 * src_stride + 2 * 32,
-                        s_256[1][2], &s_256[0][2], dst + dst_stride + 2 * 32);
-                    convolve_y_2tap_32_avg_avx2(src_ptr + 2 * src_stride + 3 * 32,
-                        s_256[1][3], &s_256[0][3], dst + dst_stride + 3 * 32);
+                        s_256[1][0],
+                        &s_256[0][0],
+                        dst + dst_stride);
+                    convolve_y_2tap_32_avg_avx2(
+                        src_ptr + 2 * src_stride + 1 * 32,
+                        s_256[1][1],
+                        &s_256[0][1],
+                        dst + dst_stride + 1 * 32);
+                    convolve_y_2tap_32_avg_avx2(
+                        src_ptr + 2 * src_stride + 2 * 32,
+                        s_256[1][2],
+                        &s_256[0][2],
+                        dst + dst_stride + 2 * 32);
+                    convolve_y_2tap_32_avg_avx2(
+                        src_ptr + 2 * src_stride + 3 * 32,
+                        s_256[1][3],
+                        &s_256[0][3],
+                        dst + dst_stride + 3 * 32);
 
                     src_ptr += 2 * src_stride;
                     dst += 2 * dst_stride;
@@ -397,8 +542,8 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
 
                 do {
                     src_ptr += 2 * src_stride;
-                    const __m128i res = convolve_y_4tap_2x2_ssse3(src_ptr,
-                        src_stride, coeffs_128, s_16, ss_128);
+                    const __m128i res = convolve_y_4tap_2x2_ssse3(
+                        src_ptr, src_stride, coeffs_128, s_16, ss_128);
                     const __m128i r = convolve_y_round_sse2(res);
                     convolve_store_2x2_sse2(r, dst, dst_stride);
 
@@ -426,8 +571,8 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
 
                 do {
                     src_ptr += 2 * src_stride;
-                    const __m128i res = convolve_y_4tap_4x2_ssse3(src_ptr,
-                        src_stride, coeffs_128, s_32, ss_128);
+                    const __m128i res = convolve_y_4tap_4x2_ssse3(
+                        src_ptr, src_stride, coeffs_128, s_32, ss_128);
                     const __m128i r = convolve_y_round_sse2(res);
                     convolve_store_4x2_sse2(r, dst, dst_stride);
 
@@ -460,8 +605,8 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
 
                 do {
                     src_ptr += 2 * src_stride;
-                    const __m256i res = convolve_y_4tap_8x2_avx2(src_ptr,
-                        src_stride, coeffs_256, s_64, ss_256);
+                    const __m256i res = convolve_y_4tap_8x2_avx2(
+                        src_ptr, src_stride, coeffs_256, s_64, ss_256);
                     sr_y_8x2_avx2(res, dst, dst_stride);
 
                     ss_256[0] = ss_256[1];
@@ -491,8 +636,8 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
 
                 do {
                     src_ptr += 2 * src_stride;
-                    convolve_y_4tap_16x2_avx2(src_ptr,
-                        src_stride, coeffs_256, s_128, ss_256, r);
+                    convolve_y_4tap_16x2_avx2(
+                        src_ptr, src_stride, coeffs_256, s_128, ss_256, r);
                     sr_y_16x2_avx2(r, dst, dst_stride);
 
                     ss_256[0] = ss_256[1];
@@ -707,8 +852,11 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
                         convolve_y_6tap_32x2_avx2(s,
                             src_stride,
                             coeffs_256,
-                            s_256, ss_256, tt_256, r);
-                        sr_y_32x2_avx2( r, d, dst_stride);
+                            s_256,
+                            ss_256,
+                            tt_256,
+                            r);
+                        sr_y_32x2_avx2(r, d, dst_stride);
 
                         ss_256[0] = ss_256[1];
                         ss_256[1] = ss_256[2];
@@ -970,7 +1118,10 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
                         convolve_y_8tap_32x2_avx2(s,
                             src_stride,
                             coeffs_256,
-                            s_256, ss_256, tt_256, r);
+                            s_256,
+                            ss_256,
+                            tt_256,
+                            r);
                         sr_y_32x2_avx2(r, d, dst_stride);
 
                         ss_256[0] = ss_256[1];
@@ -996,6 +1147,43 @@ void eb_av1_convolve_y_sr_avx2(const uint8_t *src, int32_t src_stride,
             }
         }
     }
+}
+
+SIMD_INLINE void convolve_x_2tap_32_avx2(const uint8_t *const src,
+    const __m256i coeffs[1],
+    uint8_t *const dst) {
+    __m256i r[2];
+
+    convolve_x_2tap_32_kernel_avx2(src, coeffs, r);
+    sr_x_32_avx2(r, dst);
+}
+
+SIMD_INLINE void convolve_x_2tap_32_avg(const uint8_t *const src,
+    uint8_t *const dst) {
+    const __m256i s0 = _mm256_loadu_si256((__m256i *)src);
+    const __m256i s1 = _mm256_loadu_si256((__m256i *)(src + 1));
+    const __m256i d = _mm256_avg_epu8(s0, s1);
+    _mm256_storeu_si256((__m256i *)dst, d);
+}
+
+SIMD_INLINE void convolve_x_6tap_32_avx2(const uint8_t *const src,
+    const __m256i coeffs[3],
+    const __m256i *const filt,
+    uint8_t *const dst) {
+    __m256i r[2];
+
+    convolve_x_6tap_16x2_kernel_avx2(src, 16, coeffs, filt, r);
+    sr_x_32_avx2(r, dst);
+}
+
+SIMD_INLINE void convolve_x_8tap_32_avx2(const uint8_t *const src,
+    const __m256i coeffs[4],
+    const __m256i *const filt,
+    uint8_t *const dst) {
+    __m256i r[2];
+
+    convolve_x_8tap_16x2_kernel_avx2(src, 16, coeffs, filt, r);
+    sr_x_32_avx2(r, dst);
 }
 
 void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
@@ -1027,43 +1215,22 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
                     filter_params_x, subpel_x_q4, coeffs_128);
 
                 if (w == 2) {
-                    const __m128i c = _mm_setr_epi8(
-                        0, 1, 1, 2, 2, 3, 3, 4, 8, 9, 9, 10, 10, 11, 11, 12);
-
                     do {
-                        __m128i s_128;
-
-                        s_128 = _mm_cvtsi32_si128(*(int32_t *)src_ptr);
-                        s_128 = _mm_insert_epi32(
-                            s_128, *(int32_t *)(src_ptr + src_stride), 2);
-                        s_128 = _mm_shuffle_epi8(s_128, c);
-                        const __m128i res =
-                            convolve_2tap_ssse3(&s_128, coeffs_128);
+                        const __m128i res = convolve_x_2tap_2x2_sse4_1(
+                            src_ptr, src_stride, coeffs_128);
                         const __m128i r = convolve_x_round_sse2(res);
-                        const __m128i d = _mm_packus_epi16(r, r);
-                        *(uint16_t *)dst = (uint16_t)_mm_cvtsi128_si32(d);
-                        *(uint16_t *)(dst + dst_stride) =
-                            _mm_extract_epi16(d, 2);
-
+                        convolve_store_2x2_sse2(r, dst, dst_stride);
                         src_ptr += 2 * src_stride;
                         dst += 2 * dst_stride;
                         y -= 2;
                     } while (y);
                 }
                 else if (w == 4) {
-                    const __m128i c = _mm_setr_epi8(
-                        0, 1, 1, 2, 2, 3, 3, 4, 8, 9, 9, 10, 10, 11, 11, 12);
-
                     do {
-                        __m128i s_128;
-
-                        s_128 = load_u8_8x2_sse2(src_ptr, src_stride);
-                        s_128 = _mm_shuffle_epi8(s_128, c);
-                        const __m128i res =
-                            convolve_2tap_ssse3(&s_128, coeffs_128);
+                        const __m128i res = convolve_x_2tap_4x2_ssse3(
+                            src_ptr, src_stride, coeffs_128);
                         const __m128i r = convolve_x_round_sse2(res);
                         convolve_store_4x2_sse2(r, dst, dst_stride);
-
                         src_ptr += 2 * src_stride;
                         dst += 2 * dst_stride;
                         y -= 2;
@@ -1103,25 +1270,11 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
 
                 if (w == 16) {
                     do {
-                        __m128i s_128[2][2];
-                        __m256i s_256[2], r[2];
+                        __m256i r[2];
 
-                        s_128[0][0] = _mm_loadu_si128((__m128i *)src_ptr);
-                        s_128[0][1] = _mm_loadu_si128((__m128i *)(src_ptr + 1));
-                        s_128[1][0] =
-                            _mm_loadu_si128((__m128i *)(src_ptr + src_stride));
-                        s_128[1][1] = _mm_loadu_si128(
-                            (__m128i *)(src_ptr + src_stride + 1));
-                        s_256[0] = _mm256_setr_m128i(s_128[0][0], s_128[1][0]);
-                        s_256[1] = _mm256_setr_m128i(s_128[0][1], s_128[1][1]);
-                        const __m256i s0 =
-                            _mm256_unpacklo_epi8(s_256[0], s_256[1]);
-                        const __m256i s1 =
-                            _mm256_unpackhi_epi8(s_256[0], s_256[1]);
-                        r[0] = convolve_2tap_avx2(&s0, coeffs_256);
-                        r[1] = convolve_2tap_avx2(&s1, coeffs_256);
+                        convolve_x_2tap_16x2_avx2(
+                            src_ptr, src_stride, coeffs_256, r);
                         sr_x_16x2_avx2(r, dst, dst_stride);
-
                         src_ptr += 2 * src_stride;
                         dst += 2 * dst_stride;
                         y -= 2;
@@ -1168,13 +1321,11 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
                 do {
                     __m128i s_128;
 
-                    s_128 = _mm_cvtsi32_si128(*(int32_t *)src_ptr);
-                    s_128 = _mm_insert_epi32(
-                        s_128, *(int32_t *)(src_ptr + src_stride), 2);
+                    s_128 = load_u8_4x2_sse4_1(src_ptr, src_stride);
                     const __m128i s1 = _mm_srli_si128(s_128, 1);
                     const __m128i d = _mm_avg_epu8(s_128, s1);
                     *(uint16_t *)dst = (uint16_t)_mm_cvtsi128_si32(d);
-                    *(uint16_t *)(dst + dst_stride) = _mm_extract_epi16(d, 4);
+                    *(uint16_t *)(dst + dst_stride) = _mm_extract_epi16(d, 2);
 
                     src_ptr += 2 * src_stride;
                     dst += 2 * dst_stride;
@@ -1264,26 +1415,16 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
     else if (is_convolve_4tap(filter_params_x->filter_ptr)) {
         // horz_filt as 4 tap
         const uint8_t *src_ptr = src - 1;
-        const __m128i c0 =
-            _mm_setr_epi8(0, 1, 1, 2, 2, 3, 3, 4, 8, 9, 9, 10, 10, 11, 11, 12);
-        const __m128i c1 = _mm_setr_epi8(
-            2, 3, 3, 4, 4, 5, 5, 6, 10, 11, 11, 12, 12, 13, 13, 14);
-        __m128i t, s_128[2];
 
         prepare_half_coeffs_4tap_ssse3(
             filter_params_x, subpel_x_q4, coeffs_128);
 
         if (w == 2) {
             do {
-                t = load_u8_8x2_sse2(src_ptr, src_stride);
-                s_128[0] = _mm_shuffle_epi8(t, c0);
-                s_128[1] = _mm_shuffle_epi8(t, c1);
-                const __m128i res = convolve_4tap_ssse3(s_128, coeffs_128);
+                const __m128i res =
+                    convolve_x_4tap_2x2_ssse3(src_ptr, src_stride, coeffs_128);
                 const __m128i r = convolve_x_round_sse2(res);
-                const __m128i d = _mm_packus_epi16(r, r);
-                *(uint16_t *)dst = (uint16_t)_mm_cvtsi128_si32(d);
-                *(uint16_t *)(dst + dst_stride) = _mm_extract_epi16(d, 2);
-
+                convolve_store_2x2_sse2(r, dst, dst_stride);
                 src_ptr += 2 * src_stride;
                 dst += 2 * dst_stride;
                 y -= 2;
@@ -1293,13 +1434,10 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
             assert(w == 4);
 
             do {
-                t = load_u8_8x2_sse2(src_ptr, src_stride);
-                s_128[0] = _mm_shuffle_epi8(t, c0);
-                s_128[1] = _mm_shuffle_epi8(t, c1);
-                const __m128i res = convolve_4tap_ssse3(s_128, coeffs_128);
+                const __m128i res =
+                    convolve_x_4tap_4x2_ssse3(src_ptr, src_stride, coeffs_128);
                 const __m128i r = convolve_x_round_sse2(res);
                 convolve_store_4x2_sse2(r, dst, dst_stride);
-
                 src_ptr += 2 * src_stride;
                 dst += 2 * dst_stride;
                 y -= 2;
@@ -1322,12 +1460,8 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
 
             if (w == 8) {
                 do {
-                    const __m128i s0 = _mm_loadu_si128((__m128i *)src_ptr);
-                    const __m128i s1 =
-                        _mm_loadu_si128((__m128i *)(src_ptr + src_stride));
-                    const __m256i s_256 = _mm256_setr_m128i(s0, s1);
-                    const __m256i res =
-                        convolve_x_6tap_avx2(s_256, coeffs_256, filt_256);
+                    const __m256i res = convolve_x_6tap_8x2_avx2(
+                        src_ptr, src_stride, coeffs_256, filt_256);
                     sr_x_8x2_avx2(res, dst, dst_stride);
                     src_ptr += 2 * src_stride;
                     dst += 2 * dst_stride;
@@ -1336,12 +1470,11 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
             }
             else if (w == 16) {
                 do {
-                    convolve_x_6tap_16x2_avx2(src_ptr,
-                        src_stride,
-                        coeffs_256,
-                        filt_256,
-                        dst,
-                        dst_stride);
+                    __m256i r[2];
+
+                    convolve_x_6tap_16x2_kernel_avx2(
+                        src_ptr, src_stride, coeffs_256, filt_256, r);
+                    sr_x_16x2_avx2(r, dst, dst_stride);
                     src_ptr += 2 * src_stride;
                     dst += 2 * dst_stride;
                     y -= 2;
@@ -1349,18 +1482,16 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
             }
             else if (w == 32) {
                 do {
-                    convolve_x_6tap_16x2_avx2(
-                        src_ptr, 16, coeffs_256, filt_256, dst, 16);
+                    convolve_x_6tap_32_avx2(src_ptr, coeffs_256, filt_256, dst);
                     src_ptr += src_stride;
                     dst += dst_stride;
                 } while (--y);
             }
             else if (w == 64) {
                 do {
-                    convolve_x_6tap_16x2_avx2(
-                        src_ptr, 16, coeffs_256, filt_256, dst, 16);
-                    convolve_x_6tap_16x2_avx2(
-                        src_ptr + 32, 16, coeffs_256, filt_256, dst + 32, 16);
+                    convolve_x_6tap_32_avx2(src_ptr, coeffs_256, filt_256, dst);
+                    convolve_x_6tap_32_avx2(
+                        src_ptr + 32, coeffs_256, filt_256, dst + 32);
                     src_ptr += src_stride;
                     dst += dst_stride;
                 } while (--y);
@@ -1369,14 +1500,13 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
                 assert(w == 128);
 
                 do {
-                    convolve_x_6tap_16x2_avx2(
-                        src_ptr, 16, coeffs_256, filt_256, dst, 16);
-                    convolve_x_6tap_16x2_avx2(
-                        src_ptr + 32, 16, coeffs_256, filt_256, dst + 32, 16);
-                    convolve_x_6tap_16x2_avx2(
-                        src_ptr + 64, 16, coeffs_256, filt_256, dst + 64, 16);
-                    convolve_x_6tap_16x2_avx2(
-                        src_ptr + 96, 16, coeffs_256, filt_256, dst + 96, 16);
+                    convolve_x_6tap_32_avx2(src_ptr, coeffs_256, filt_256, dst);
+                    convolve_x_6tap_32_avx2(
+                        src_ptr + 1 * 32, coeffs_256, filt_256, dst + 1 * 32);
+                    convolve_x_6tap_32_avx2(
+                        src_ptr + 2 * 32, coeffs_256, filt_256, dst + 2 * 32);
+                    convolve_x_6tap_32_avx2(
+                        src_ptr + 3 * 32, coeffs_256, filt_256, dst + 3 * 32);
                     src_ptr += src_stride;
                     dst += dst_stride;
                 } while (--y);
@@ -1393,12 +1523,8 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
 
             if (w == 8) {
                 do {
-                    const __m128i s0 = _mm_loadu_si128((__m128i *)src_ptr);
-                    const __m128i s1 =
-                        _mm_loadu_si128((__m128i *)(src_ptr + src_stride));
-                    const __m256i s_256 = _mm256_setr_m128i(s0, s1);
-                    const __m256i res =
-                        convolve_x_8tap_avx2(s_256, coeffs_256, filt_256);
+                    const __m256i res = convolve_x_8tap_8x2_avx2(
+                        src_ptr, src_stride, coeffs_256, filt_256);
                     sr_x_8x2_avx2(res, dst, dst_stride);
                     src_ptr += 2 * src_stride;
                     dst += 2 * dst_stride;
@@ -1407,12 +1533,11 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
             }
             else if (w == 16) {
                 do {
-                    convolve_x_8tap_16x2_avx2(src_ptr,
-                        src_stride,
-                        coeffs_256,
-                        filt_256,
-                        dst,
-                        dst_stride);
+                    __m256i r[2];
+
+                    convolve_x_8tap_16x2_kernel_avx2(
+                        src_ptr, src_stride, coeffs_256, filt_256, r);
+                    sr_x_16x2_avx2(r, dst, dst_stride);
                     src_ptr += 2 * src_stride;
                     dst += 2 * dst_stride;
                     y -= 2;
@@ -1420,18 +1545,16 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
             }
             else if (w == 32) {
                 do {
-                    convolve_x_8tap_16x2_avx2(
-                        src_ptr, 16, coeffs_256, filt_256, dst, 16);
+                    convolve_x_8tap_32_avx2(src_ptr, coeffs_256, filt_256, dst);
                     src_ptr += src_stride;
                     dst += dst_stride;
                 } while (--y);
             }
             else if (w == 64) {
                 do {
-                    convolve_x_8tap_16x2_avx2(
-                        src_ptr, 16, coeffs_256, filt_256, dst, 16);
-                    convolve_x_8tap_16x2_avx2(
-                        src_ptr + 32, 16, coeffs_256, filt_256, dst + 32, 16);
+                    convolve_x_8tap_32_avx2(src_ptr, coeffs_256, filt_256, dst);
+                    convolve_x_8tap_32_avx2(
+                        src_ptr + 32, coeffs_256, filt_256, dst + 32);
                     src_ptr += src_stride;
                     dst += dst_stride;
                 } while (--y);
@@ -1440,14 +1563,13 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
                 assert(w == 128);
 
                 do {
-                    convolve_x_8tap_16x2_avx2(
-                        src_ptr, 16, coeffs_256, filt_256, dst, 16);
-                    convolve_x_8tap_16x2_avx2(
-                        src_ptr + 32, 16, coeffs_256, filt_256, dst + 32, 16);
-                    convolve_x_8tap_16x2_avx2(
-                        src_ptr + 64, 16, coeffs_256, filt_256, dst + 64, 16);
-                    convolve_x_8tap_16x2_avx2(
-                        src_ptr + 96, 16, coeffs_256, filt_256, dst + 96, 16);
+                    convolve_x_8tap_32_avx2(src_ptr, coeffs_256, filt_256, dst);
+                    convolve_x_8tap_32_avx2(
+                        src_ptr + 1 * 32, coeffs_256, filt_256, dst + 1 * 32);
+                    convolve_x_8tap_32_avx2(
+                        src_ptr + 2 * 32, coeffs_256, filt_256, dst + 2 * 32);
+                    convolve_x_8tap_32_avx2(
+                        src_ptr + 3 * 32, coeffs_256, filt_256, dst + 3 * 32);
                     src_ptr += src_stride;
                     dst += dst_stride;
                 } while (--y);
@@ -1455,6 +1577,7 @@ void eb_av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
         }
     }
 }
+
 #if COMP_MODE
 // Loads and stores to do away with the tedium of casting the address
 // to the right type.
