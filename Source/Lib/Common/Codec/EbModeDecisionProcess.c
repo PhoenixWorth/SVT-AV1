@@ -20,8 +20,11 @@ static void mode_decision_context_dctor(EbPtr p)
 
    }
 #endif
-
+#if MD_STAGING
+    EB_DELETE_PTR_ARRAY(obj->candidate_buffer_ptr_array, MAX_NFL_BUFF);
+#else
     EB_DELETE_PTR_ARRAY(obj->candidate_buffer_ptr_array, (MAX_NFL + 1 + 1));
+#endif
     EB_DELETE(obj->trans_quant_buffers_ptr);
     if (obj->hbd_mode_decision)
         EB_FREE_ALIGNED_ARRAY(obj->cfl_temp_luma_recon16bit);
@@ -108,6 +111,15 @@ EbErrorType mode_decision_context_ctor(
         eb_trans_quant_buffers_ctor);
 
     // Cost Arrays
+#if MD_STAGING
+    EB_MALLOC_ARRAY(context_ptr->fast_cost_array, MAX_NFL_BUFF);
+    EB_MALLOC_ARRAY(context_ptr->full_cost_array, MAX_NFL_BUFF);
+    EB_MALLOC_ARRAY(context_ptr->full_cost_skip_ptr, MAX_NFL_BUFF);
+    EB_MALLOC_ARRAY(context_ptr->full_cost_merge_ptr, MAX_NFL_BUFF);
+    // Candidate Buffers
+    EB_ALLOC_PTR_ARRAY(context_ptr->candidate_buffer_ptr_array, MAX_NFL_BUFF);
+    for (bufferIndex = 0; bufferIndex < MAX_NFL_BUFF; ++bufferIndex) {
+#else
     // Hsan: MAX_NFL + 1 scratch buffer for intra + 1 scratch buffer for inter
     EB_MALLOC_ARRAY(context_ptr->fast_cost_array, MAX_NFL + 1 + 1);
     EB_MALLOC_ARRAY(context_ptr->full_cost_array, MAX_NFL + 1 + 1);
@@ -117,6 +129,7 @@ EbErrorType mode_decision_context_ctor(
     EB_ALLOC_PTR_ARRAY(context_ptr->candidate_buffer_ptr_array, (MAX_NFL + 1 + 1));
 
     for (bufferIndex = 0; bufferIndex < (MAX_NFL + 1 + 1); ++bufferIndex) {
+#endif
         EB_NEW(
             context_ptr->candidate_buffer_ptr_array[bufferIndex],
             mode_decision_candidate_buffer_ctor,
@@ -459,8 +472,15 @@ void reset_mode_decision(
     picture_control_set_ptr->parent_pcs_ptr->allow_high_precision_mv = picture_control_set_ptr->enc_mode == ENC_M0 &&
         (picture_control_set_ptr->parent_pcs_ptr->is_pan || picture_control_set_ptr->parent_pcs_ptr->is_tilt) ? 1 : 0;
 #endif
-
+#if SC_SETTINGS_TUNING
+    EbBool enable_wm;
+    if (picture_control_set_ptr->parent_pcs_ptr->sc_content_detected)
+        enable_wm = EB_FALSE;
+    else
+        enable_wm = (picture_control_set_ptr->parent_pcs_ptr->enc_mode <= ENC_M5) || MR_MODE ? EB_TRUE : EB_FALSE;
+#else
     EbBool enable_wm = (picture_control_set_ptr->parent_pcs_ptr->enc_mode <= ENC_M5) || MR_MODE ? EB_TRUE : EB_FALSE;
+#endif
     enable_wm = picture_control_set_ptr->parent_pcs_ptr->temporal_layer_index > 0 ? EB_FALSE : enable_wm;
     frm_hdr->allow_warped_motion = enable_wm
         && !(frm_hdr->frame_type == KEY_FRAME || frm_hdr->frame_type == INTRA_ONLY_FRAME)

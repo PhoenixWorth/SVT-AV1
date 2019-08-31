@@ -14215,7 +14215,9 @@ extern "C" {
         uint8_t                               tx_search_level;
         uint64_t                              tx_weight;
         uint8_t                               tx_search_reduced_set;
+#if !MD_STAGING
         uint8_t                               skip_tx_search;
+#endif
         uint8_t                               interpolation_search_level;
         uint8_t                               nsq_search_level;
         uint8_t                               nsq_max_shapes_md; // max number of shapes to be tested in MD
@@ -14230,6 +14232,7 @@ extern "C" {
         uint8_t                               altref_strength;
         int32_t                               pic_decision_reorder_queue_idx;
         struct PictureParentControlSet       *temp_filt_pcs_list[ALTREF_MAX_NFRAMES];
+        EbByte                               save_enhanced_picture_ptr[3];
         EbHandle temp_filt_done_semaphore;
         EbHandle temp_filt_mutex;
         EbHandle debug_mutex;
@@ -14246,6 +14249,7 @@ extern "C" {
 #else
         uint8_t                               altref_nframes;
 #endif
+        EbBool                                temporal_filtering_on;
 #if QPS_TUNING
         uint64_t                              filtered_sse; // the normalized SSE between filtered and original alt_ref with 8 bit precision.
                                                             // I Slice has the value of the next ALT_REF picture
