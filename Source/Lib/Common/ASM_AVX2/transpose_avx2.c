@@ -9,5 +9,5 @@
 
 void transpose_8bit_16x16_reg128bit_instance_avx2(const __m128i *const in,
     __m128i *const out) {
-	transpose_8bit_16x16_reg128bit_avx2(in, out);
+        transpose_8bit_16x16_reg128bit_avx2(in, out);
 }
