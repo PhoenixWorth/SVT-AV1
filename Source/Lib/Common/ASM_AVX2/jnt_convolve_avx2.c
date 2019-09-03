@@ -2828,11 +2828,11 @@ SIMD_INLINE void jnt_convolve_x_avg_6tap_32_avx2(const uint8_t *const src,
 }
 
 SIMD_INLINE void jnt_convolve_x_no_avg_6tap_32_avx2(
-    const uint8_t *const src, const int32_t src_stride, const __m256i coeffs[3],
+    const uint8_t *const src, const __m256i coeffs[3],
     const __m256i *const filt, const __m256i offset, ConvBufType *const dst) {
     __m256i r[2];
 
-    convolve_x_6tap_16x2_kernel_avx2(src, src_stride, coeffs, filt, r);
+    convolve_x_6tap_16x2_kernel_avx2(src, 16, coeffs, filt, r);
     jnt_no_avg_32_avx2(r, offset, dst);
 }
 
@@ -2910,7 +2910,6 @@ void eb_av1_jnt_convolve_x_avx2(const uint8_t *src, int32_t src_stride,
     ConvolveParams *conv_params) {
     ConvBufType *dst = conv_params->dst;
     int32_t dst_stride = conv_params->dst_stride;
-    const int32_t fo_horiz = filter_params_x->taps / 2 - 1;
     const int32_t round_0 = 3;
     const int32_t round_1 = COMPOUND_ROUND1_BITS;
     const int32_t bits = FILTER_BITS - round_1;
@@ -3558,17 +3557,14 @@ void eb_av1_jnt_convolve_x_avx2(const uint8_t *src, int32_t src_stride,
                 if (conv_params->do_average) {
                     if (conv_params->use_jnt_comp_avg) {
                         do {
-                            jnt_convolve_x_comp_avg_6tap_16x2_avx2(
+                            jnt_convolve_x_comp_avg_6tap_32_avx2(
                                 src_ptr,
-                                16,
                                 coeffs_256,
                                 filt_256,
                                 factor_256,
                                 offset_comp_avg_256,
                                 dst,
-                                16,
-                                dst8,
-                                16);
+                                dst8);
                             src_ptr += src_stride;
                             dst += dst_stride;
                             dst8 += dst8_stride;
@@ -3576,15 +3572,12 @@ void eb_av1_jnt_convolve_x_avx2(const uint8_t *src, int32_t src_stride,
                     }
                     else {
                         do {
-                            jnt_convolve_x_avg_6tap_16x2_avx2(src_ptr,
-                                16,
+                            jnt_convolve_x_avg_6tap_32_avx2(src_ptr,
                                 coeffs_256,
                                 filt_256,
                                 offset_avg_256,
                                 dst,
-                                16,
-                                dst8,
-                                16);
+                                dst8);
                             src_ptr += src_stride;
                             dst += dst_stride;
                             dst8 += dst8_stride;
@@ -3593,13 +3586,11 @@ void eb_av1_jnt_convolve_x_avx2(const uint8_t *src, int32_t src_stride,
                 }
                 else {
                     do {
-                        jnt_convolve_x_no_avg_6tap_16x2_avx2(src_ptr,
-                            16,
+                        jnt_convolve_x_no_avg_6tap_32_avx2(src_ptr,
                             coeffs_256,
                             filt_256,
                             offset_no_avg_256,
-                            dst,
-                            16);
+                            dst);
                         src_ptr += src_stride;
                         dst += dst_stride;
                     } while (--y);
