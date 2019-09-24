@@ -43,6 +43,22 @@ extern "C" {
 #define MR_MODE                           0
 #define EIGTH_PEL_MV                      0
 
+#define ENHANCE_ATB                             0
+#if ENHANCE_ATB
+#define ATB_INTER_SUPPORT                       1 // ATB INTER support
+#define ATB_INTER_1_DEPTH                       1 // ATB INTER Depth 1
+#define ATB_INTER_2_DEPTH                       0 // ATB INTER Depth 2
+#define ATB_RATE_UPGRADE_0                      1
+#define ATB_RATE_UPGRADE_1                      1
+#define ATB_SB_8x8_PATH                         1
+#define ATB_SB_SKIP_PATH                        1
+#define ATB_FIX_DEPTH_2_PATH                    1
+#define SHUT_ATB_NREF                           1
+#define TX_TYPE_SEARCH_OPT                      1
+#define NON_ATB_PATH_BUG_FIX                    1
+#endif
+
+
 //FOR DEBUGGING - Do not remove
 #define NO_ENCDEC                         0 // bypass encDec to test cmpliance of MD. complained achieved when skip_flag is OFF. Port sample code from VCI-SW_AV1_Candidate1 branch
 
@@ -117,7 +133,11 @@ enum {
 #define ADD_DELTA_QP_SUPPORT                      1  // Add delta QP support
 #define BLOCK_MAX_COUNT_SB_128                    4421  // TODO: reduce alloction for 64x64
 #define BLOCK_MAX_COUNT_SB_64                     1101  // TODO: reduce alloction for 64x64
+#if ATB_INTER_SUPPORT
+#define MAX_TXB_COUNT                             16 // Maximum number of transform blocks per depth
+#else
 #define MAX_TXB_COUNT                             4 // Maximum number of transform blocks.
+#endif
 #if II_COMP_FLAG
 #define MAX_NFL                                  80
 #else
@@ -177,7 +197,11 @@ enum {
 // Maximum number of tile rows and tile columns
 #define MAX_TILE_ROWS 64
 #define MAX_TILE_COLS 64
+#if ATB_INTER_SUPPORT
+#define MAX_VARTX_DEPTH 2
+#else
 #define MAX_VARTX_DEPTH 1
+#endif
 #define MI_SIZE_64X64 (64 >> MI_SIZE_LOG2)
 #define MI_SIZE_128X128 (128 >> MI_SIZE_LOG2)
 #define MAX_PALETTE_SQUARE (64 * 64)
@@ -2436,9 +2460,11 @@ void(*ErrorHandler)(
 #define LOG2F_MAX_LCU_SIZE                          6u
 #define LOG2_64_SIZE                                6 // log2(BLOCK_SIZE_64)
 #define MAX_LEVEL_COUNT                             5 // log2(BLOCK_SIZE_64) - log2(MIN_BLOCK_SIZE)
+#if !ATB_INTER_SUPPORT
 #define MAX_TU_DEPTH                                2
-#define LOG_MIN_BLOCK_SIZE                             3
-#define MIN_BLOCK_SIZE                                 (1 << LOG_MIN_BLOCK_SIZE)
+#endif
+#define LOG_MIN_BLOCK_SIZE                          3
+#define MIN_BLOCK_SIZE                              (1 << LOG_MIN_BLOCK_SIZE)
 #define LOG_MIN_PU_SIZE                             2
 #define MIN_PU_SIZE                                 (1 << LOG_MIN_PU_SIZE)
 #define MAX_NUM_OF_PU_PER_CU                        1
