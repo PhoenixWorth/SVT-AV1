@@ -43,7 +43,7 @@ extern "C" {
 #define MR_MODE                           0
 #define EIGTH_PEL_MV                      0
 
-#define ENHANCE_ATB                             0
+#define ENHANCE_ATB                             1
 #if ENHANCE_ATB
 #define ATB_INTER_SUPPORT                       1 // ATB INTER support
 #define ATB_INTER_1_DEPTH                       1 // ATB INTER Depth 1
