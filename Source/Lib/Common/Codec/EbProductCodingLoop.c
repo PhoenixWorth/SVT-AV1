@@ -238,7 +238,7 @@ void mode_decision_update_neighbor_arrays(
                 NEIGHBOR_ARRAY_UNIT_TOP_AND_LEFT_ONLY_MASK);
         }
     }
-#if ATB_RATE_UPGRADE_0
+#if ENHANCE_ATB
     uint8_t tx_size = tx_depth_to_tx_size[context_ptr->cu_ptr->tx_depth][context_ptr->blk_geom->bsize];
     uint8_t bw = tx_size_wide[tx_size];
     uint8_t bh = tx_size_high[tx_size];
@@ -3610,19 +3610,7 @@ uint8_t get_end_tx_depth(BlockSize bsize, uint8_t btype) {
         bsize == BLOCK_32X16 ||
         bsize == BLOCK_16X8 ||
         bsize == BLOCK_8X16)
-#if ATB_INTER_SUPPORT
-#if ATB_INTER_1_DEPTH
-#if ATB_INTER_2_DEPTH
-        tx_depth = (btype == INTRA_MODE) ? 1 : 2;
-#else
         tx_depth = (btype == INTRA_MODE) ? 1 : 1;
-#endif
-#else
-        tx_depth = (btype == INTRA_MODE) ? 1 : 0;
-#endif
-#else
-        tx_depth = (btype == INTRA_MODE) ? 1 : 1;
-#endif
     else if (bsize == BLOCK_8X8 ||
         bsize == BLOCK_64X16 ||
         bsize == BLOCK_16X64 ||
@@ -3630,20 +3618,12 @@ uint8_t get_end_tx_depth(BlockSize bsize, uint8_t btype) {
         bsize == BLOCK_8X32 ||
         bsize == BLOCK_16X4 ||
         bsize == BLOCK_4X16)
-#if ATB_INTER_SUPPORT
-#if ATB_INTER_1_DEPTH
         tx_depth = (btype == INTRA_MODE) ? 1 : 1;
-#else
-        tx_depth = (btype == INTRA_MODE) ? 1 : 0;
-#endif
-#else
-        tx_depth = 1;
-#endif
 
     return tx_depth;
 }
 
-#if ATB_INTER_SUPPORT
+#if ENHANCE_ATB
 uint8_t allowed_tx_set_a[TX_SIZES_ALL][TX_TYPES];
 
 void tx_initialize_neighbor_arrays(
@@ -4198,19 +4178,7 @@ static uint64_t cost_selected_tx_size(
     const MbModeInfo *const mbmi = &mi->mbmi;
     const BlockSize bsize = mbmi->sb_type;
     uint64_t bits = 0;
-#if ATB_RATE_UPGRADE_1 && !ATB_SB_8x8_PATH
-    const TxSize tx_size = mbmi->tx_size;
-    const int tx_size_ctx = get_tx_size_context(xd);
-    const int depth = tx_size_to_depth(tx_size, bsize);
-    const int max_depths = bsize_to_max_depth(bsize);
-    const int32_t tx_size_cat = bsize_to_tx_size_cat(bsize);
 
-    assert(depth >= 0 && depth <= max_depths);
-    assert(!is_inter_block(mbmi));
-    assert(IMPLIES(is_rect_tx(tx_size), is_rect_tx_allowed(/*xd,*/ mbmi)));
-
-    bits += md_rate_estimation_ptr->tx_size_fac_bits[tx_size_cat][tx_size_ctx][depth];
-#else
     if (block_signals_txsize(bsize)) {
         const TxSize tx_size = mbmi->tx_size;
         const int tx_size_ctx = get_tx_size_context(xd);
@@ -4226,7 +4194,7 @@ static uint64_t cost_selected_tx_size(
             max_depths + 1);*/
         bits += md_rate_estimation_ptr->tx_size_fac_bits[tx_size_cat][tx_size_ctx][depth];
     }
-#endif
+
     return bits;
 }
 
@@ -4285,8 +4253,6 @@ static INLINE void set_mi_row_col(
     xd->mb_to_right_edge = ((mi_cols - bw - mi_col) * MI_SIZE) * 8;
 
     xd->mi_stride = mi_stride;
-
-    // NM: To be updated when tile is supported.
     tile->mi_row_start = 0;
     tile->mi_col_start = 0;
 
@@ -4323,11 +4289,9 @@ static INLINE void set_mi_row_col(
 
 uint64_t estimate_tx_size_bits(
     PictureControlSet       *pcsPtr,
-#if ATB_RATE_UPGRADE_0
     ModeDecisionContext     *context_ptr,
     ModeDecisionCandidate   *candidate_ptr,
     EbBool                   skip_flag,
-#endif
     uint32_t                 cu_origin_x,
     uint32_t                 cu_origin_y,
     CodingUnit               *cu_ptr,
@@ -4351,11 +4315,8 @@ uint64_t estimate_tx_size_bits(
     BlockSize bsize = blk_geom->bsize;
     const int32_t bw = mi_size_wide[bsize];
     const int32_t bh = mi_size_high[bsize];
-#if INCOMPLETE_SB_FIX
     uint32_t mi_stride = pcsPtr->mi_stride;
-#else
-    uint32_t mi_stride = pcsPtr->parent_pcs_ptr->sequence_control_set_ptr->picture_width_in_sb*(BLOCK_SIZE_64 >> MI_SIZE_LOG2);
-#endif
+
     set_mi_row_col(
         pcsPtr,
         xd,
@@ -4370,34 +4331,25 @@ uint64_t estimate_tx_size_bits(
 
     MbModeInfo * mbmi = &xd->mi[0]->mbmi;
 
-#if ATB_RATE_UPGRADE_0
     memcpy(context_ptr->above_txfm_context, &(txfm_context_array->top_array[txfm_context_above_index]), (blk_geom->bwidth >> MI_SIZE_LOG2) * sizeof(TXFM_CONTEXT));
     memcpy(context_ptr->left_txfm_context, &(txfm_context_array->left_array[txfm_context_left_index]), (blk_geom->bheight >> MI_SIZE_LOG2) * sizeof(TXFM_CONTEXT));
 
     xd->above_txfm_context = context_ptr->above_txfm_context;
     xd->left_txfm_context = context_ptr->left_txfm_context;
-#else
-    xd->above_txfm_context = &txfm_context_array->top_array[txfm_context_above_index];
-    xd->left_txfm_context = &txfm_context_array->left_array[txfm_context_left_index];
-#endif
+
     mbmi->tx_size = blk_geom->txsize[tx_depth][0];
     mbmi->sb_type = blk_geom->bsize;
-#if ATB_RATE_UPGRADE_0
     mbmi->use_intrabc = candidate_ptr->use_intrabc;
     mbmi->ref_frame[0] = candidate_ptr->ref_frame_type;
     mbmi->tx_depth = tx_depth;
-#endif
+
     uint64_t bits = tx_size_bits(
         md_rate_estimation_ptr,
         xd,
         mbmi,
         tx_mode,
         bsize,
-#if ATB_RATE_UPGRADE_0 //--------
         skip_flag);
-#else
-        0);
-#endif
 
     return bits;
 }
@@ -4418,108 +4370,20 @@ uint64_t get_tx_size_bits(
     uint32_t txfm_context_above_index = get_neighbor_array_unit_top_index(
         context_ptr->txfm_context_array,
         context_ptr->cu_origin_x);
-#if ATB_SB_8x8_PATH
-#if ATB_SB_SKIP_PATH
-    {
-#else
-    if (block_has_coeff) {
-#endif
-#else
-    if (block_has_coeff && block_signals_txsize(context_ptr->blk_geom->bsize)) {
-#endif
-#if 1
-        tx_size_bits = estimate_tx_size_bits(
-            picture_control_set_ptr,
-            context_ptr,
-            candidateBuffer->candidate_ptr,
-            block_has_coeff ? 0 : 1,
-            context_ptr->cu_origin_x,
-            context_ptr->cu_origin_y,
-            context_ptr->cu_ptr,
-            context_ptr->blk_geom,
-            context_ptr->txfm_context_array,
-            tx_depth,
-            context_ptr->md_rate_estimation_ptr);
-        //printf("%d\t%d\t%d\t%d\t%d\n", picture_control_set_ptr->picture_number, context_ptr->cu_origin_x, context_ptr->cu_origin_y, is_inter, tx_size_bits);
-#else
-        if (is_inter) {
-#if 1
 
-            if (picture_control_set_ptr->picture_number == 16 &&
-                context_ptr->cu_origin_x == 0 &&
-                context_ptr->cu_origin_y == 28 &&
-                is_inter &&
-                context_ptr->blk_geom->bsize == 17)
-                printf("");
+    tx_size_bits = estimate_tx_size_bits(
+        picture_control_set_ptr,
+        context_ptr,
+        candidateBuffer->candidate_ptr,
+        block_has_coeff ? 0 : 1,
+        context_ptr->cu_origin_x,
+        context_ptr->cu_origin_y,
+        context_ptr->cu_ptr,
+        context_ptr->blk_geom,
+        context_ptr->txfm_context_array,
+        tx_depth,
+        context_ptr->md_rate_estimation_ptr);
 
-
-            tx_size_bits = estimate_tx_size_bits(
-                picture_control_set_ptr,
-                context_ptr,
-                candidateBuffer->candidate_ptr,
-                block_has_coeff ? 0 : 1,
-                context_ptr->cu_origin_x,
-                context_ptr->cu_origin_y,
-                context_ptr->cu_ptr,
-                context_ptr->blk_geom,
-                context_ptr->txfm_context_array,
-                context_ptr->tx_depth,
-                context_ptr->md_rate_estimation_ptr);
-
-#else
-            int ctx = txfm_partition_context(&(context_ptr->txfm_context_array->top_array[txfm_context_above_index]), &(context_ptr->txfm_context_array->left_array[txfm_context_left_index]), context_ptr->blk_geom->bsize, context_ptr->blk_geom->txsize[context_ptr->tx_depth][0]);
-            tx_size_bits = context_ptr->md_rate_estimation_ptr->txfm_partition_fac_bits[ctx][0];
-#endif
-            printf("%d\t%d\t%d\t%d\t%d\t%d\n", picture_control_set_ptr->picture_number, context_ptr->cu_origin_x, context_ptr->cu_origin_y, is_inter, context_ptr->blk_geom->bsize, tx_size_bits);
-        }
-        else {
-#if 1
-            tx_size_bits = estimate_tx_size_bits(
-                picture_control_set_ptr,
-                context_ptr,
-                candidateBuffer->candidate_ptr,
-                block_has_coeff ? 0 : 1,
-                context_ptr->cu_origin_x,
-                context_ptr->cu_origin_y,
-                context_ptr->cu_ptr,
-                context_ptr->blk_geom,
-                context_ptr->txfm_context_array,
-                context_ptr->tx_depth,
-                context_ptr->md_rate_estimation_ptr);
-            //printf("%d\t%d\t%d\t%d\t%d\n", picture_control_set_ptr->picture_number, context_ptr->cu_origin_x, context_ptr->cu_origin_y, is_inter, tx_size_bits);
-#else
-            MacroBlockD *xd = context_ptr->cu_ptr->av1xd;
-            Av1Common  *cm = picture_control_set_ptr->parent_pcs_ptr->av1_cm;
-            TileInfo * tile = &xd->tile;
-            int32_t mi_row = context_ptr->cu_origin_y >> MI_SIZE_LOG2;
-            int32_t mi_col = context_ptr->cu_origin_x >> MI_SIZE_LOG2;
-            BlockSize bsize = context_ptr->blk_geom->bsize;
-            const int32_t bw = mi_size_wide[bsize];
-            const int32_t bh = mi_size_high[bsize];
-            uint32_t mi_stride = picture_control_set_ptr->mi_stride;
-            set_mi_row_col(
-                picture_control_set_ptr,
-                xd,
-                tile,
-                mi_row,
-                bh,
-                mi_col,
-                bw,
-                mi_stride,
-                cm->mi_rows,
-                cm->mi_cols);
-            MbModeInfo * mbmi = &xd->mi[0]->mbmi;
-            xd->above_txfm_context = &context_ptr->txfm_context_array->top_array[txfm_context_above_index];
-            xd->left_txfm_context = &context_ptr->txfm_context_array->left_array[txfm_context_left_index];
-            mbmi->tx_size = context_ptr->blk_geom->txsize[context_ptr->tx_depth][0];
-            mbmi->sb_type = context_ptr->blk_geom->bsize;
-            mbmi->use_intrabc = 0;
-            mbmi->ref_frame[0] = INTRA_FRAME;
-            tx_size_bits = cost_selected_tx_size(xd, context_ptr->md_rate_estimation_ptr);
-#endif
-        }
-#endif
-    }
     return tx_size_bits;
 }
 
@@ -5501,12 +5365,8 @@ void full_loop_core(
         else
             end_tx_depth = 0;
         // Transform partitioning path (INTRA Luma)
-#if ATB_INTER_SUPPORT
+#if ENHANCE_ATB
         if (picture_control_set_ptr->parent_pcs_ptr->atb_mode && context_ptr->md_staging_skip_atb == EB_FALSE && end_tx_depth && candidate_buffer->candidate_ptr->use_intrabc == 0) {
-#else
-        if (picture_control_set_ptr->parent_pcs_ptr->atb_mode && context_ptr->md_staging_skip_atb == EB_FALSE && end_tx_depth && candidate_buffer->candidate_ptr->type == INTRA_MODE && candidate_buffer->candidate_ptr->use_intrabc == 0) {
-#endif
-#if ATB_INTER_SUPPORT
             int32_t is_inter = (candidate_buffer->candidate_ptr->type == INTER_MODE || candidate_buffer->candidate_ptr->use_intrabc) ? EB_TRUE : EB_FALSE;
 
             //Y Residual: residual for INTRA is computed inside the TU loop
@@ -5528,6 +5388,7 @@ void full_loop_core(
 
             tx_partitioning_path(
 #else
+        if (picture_control_set_ptr->parent_pcs_ptr->atb_mode && context_ptr->md_staging_skip_atb == EB_FALSE && end_tx_depth && candidate_buffer->candidate_ptr->type == INTRA_MODE && candidate_buffer->candidate_ptr->use_intrabc == 0) {
             perform_intra_tx_partitioning(
 #endif
                 candidate_buffer,
@@ -5584,7 +5445,7 @@ void full_loop_core(
                 //re-init
                 candidate_ptr->y_has_coeff = 0;
             }
-#if TX_TYPE_SEARCH_OPT
+#if ENHANCE_ATB
             context_ptr->tx_depth = candidate_buffer->candidate_ptr->tx_depth;
             context_ptr->full_loop_luma_dc_sign_level_coeff_neighbor_array = context_ptr->luma_dc_sign_level_coeff_neighbor_array;
             context_ptr->txb_1d_offset = 0;

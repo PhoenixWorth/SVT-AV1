@@ -82,7 +82,7 @@ extern "C" {
         ModeDecisionCandidate       **fast_candidate_ptr_array;
         ModeDecisionCandidate        *fast_candidate_array;
         ModeDecisionCandidateBuffer **candidate_buffer_ptr_array;
-#if ATB_INTER_SUPPORT
+#if ENHANCE_ATB
         ModeDecisionCandidateBuffer  *scratch_candidate_buffer;
 #endif
         MdRateEstimationContext      *md_rate_estimation_ptr;
@@ -107,7 +107,7 @@ extern "C" {
         NeighborArrayUnit            *tx_search_luma_recon_neighbor_array16bit;
         NeighborArrayUnit            *skip_coeff_neighbor_array;
         NeighborArrayUnit            *luma_dc_sign_level_coeff_neighbor_array; // Stored per 4x4. 8 bit: lower 6 bits (COEFF_CONTEXT_BITS), shows if there is at least one Coef. Top 2 bit store the sign of DC as follow: 0->0,1->-1,2-> 1
-#if ATB_INTER_SUPPORT
+#if ENHANCE_ATB
         NeighborArrayUnit            *full_loop_luma_dc_sign_level_coeff_neighbor_array; // Stored per 4x4. 8 bit: lower 6 bits (COEFF_CONTEXT_BITS), shows if there is at least one Coef. Top 2 bit store the sign of DC as follow: 0->0,1->-1,2-> 1
 #endif
         NeighborArrayUnit            *tx_search_luma_dc_sign_level_coeff_neighbor_array; // Stored per 4x4. 8 bit: lower 6 bits (COEFF_CONTEXT_BITS), shows if there is at least one Coef. Top 2 bit store the sign of DC as follow: 0->0,1->-1,2-> 1
@@ -172,7 +172,7 @@ extern "C" {
         EbBool                          hbd_mode_decision;
         uint16_t                        qp_index;
         uint64_t                        three_quad_energy;
-#if TX_TYPE_SEARCH_OPT
+#if ENHANCE_ATB
         uint32_t                        txb_1d_offset;
 #endif
         EbBool                          uv_search_path;
@@ -294,7 +294,7 @@ extern "C" {
     uint8_t                             edge_based_skip_angle_intra;
     EbBool                              coeff_based_skip_atb;
     uint8_t                             prune_ref_frame_for_rec_partitions;
-#if ATB_RATE_UPGRADE_0
+#if ENHANCE_ATB
     uint8_t                            *above_txfm_context;
     uint8_t                            *left_txfm_context;
 #endif

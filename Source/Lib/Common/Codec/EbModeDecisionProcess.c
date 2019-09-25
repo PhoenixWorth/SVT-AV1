@@ -15,7 +15,7 @@ static void mode_decision_context_dctor(EbPtr p)
 
     EB_FREE_ARRAY(obj->ref_best_ref_sq_table);
     EB_FREE_ARRAY(obj->ref_best_cost_sq_table);
-#if ATB_RATE_UPGRADE_0
+#if ENHANCE_ATB
     EB_FREE_ARRAY(obj->above_txfm_context);
     EB_FREE_ARRAY(obj->left_txfm_context);
 #endif
@@ -29,7 +29,7 @@ static void mode_decision_context_dctor(EbPtr p)
 #endif
     EB_DELETE_PTR_ARRAY(obj->candidate_buffer_ptr_array, MAX_NFL_BUFF);
 
-#if ATB_INTER_SUPPORT
+#if ENHANCE_ATB
     EB_FREE_ARRAY(obj->scratch_candidate_buffer->candidate_ptr);
     EB_FREE_ARRAY(obj->scratch_candidate_buffer);
 #endif
@@ -138,7 +138,7 @@ EbErrorType mode_decision_context_ctor(
             &(context_ptr->full_cost_merge_ptr[bufferIndex])
         );
     }
-#if ATB_INTER_SUPPORT
+#if ENHANCE_ATB
     EB_MALLOC_ARRAY(context_ptr->scratch_candidate_buffer, 1);
 
     EB_NEW(
@@ -223,7 +223,7 @@ EbErrorType mode_decision_context_ctor(
     }
     EB_MALLOC_ARRAY(context_ptr->ref_best_cost_sq_table, MAX_REF_TYPE_CAND);
     EB_MALLOC_ARRAY(context_ptr->ref_best_ref_sq_table, MAX_REF_TYPE_CAND);
-#if ATB_RATE_UPGRADE_0
+#if ENHANCE_ATB
     EB_MALLOC_ARRAY(context_ptr->above_txfm_context, (MAX_SB_SIZE >> MI_SIZE_LOG2));
     EB_MALLOC_ARRAY(context_ptr->left_txfm_context, (MAX_SB_SIZE >> MI_SIZE_LOG2));
 #endif

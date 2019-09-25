@@ -665,7 +665,7 @@ static void mode_decision_candidate_buffer_dctor(EbPtr p)
     EB_DELETE(obj->recon_coeff_ptr);
     EB_DELETE(obj->recon_ptr);
 }
-#if ATB_INTER_SUPPORT
+#if ENHANCE_ATB
 static void mode_decision_scratch_candidate_buffer_dctor(EbPtr p)
 {
     ModeDecisionCandidateBuffer *obj = (ModeDecisionCandidateBuffer*)p;
@@ -781,7 +781,7 @@ EbErrorType mode_decision_candidate_buffer_ctor(
     buffer_ptr->full_cost_merge_ptr = full_cost_merge_ptr;
     return EB_ErrorNone;
 }
-#if ATB_INTER_SUPPORT
+#if ENHANCE_ATB
 EbErrorType mode_decision_scratch_candidate_buffer_ctor(
     ModeDecisionCandidateBuffer    *buffer_ptr,
     EbBitDepthEnum                  max_bitdepth)

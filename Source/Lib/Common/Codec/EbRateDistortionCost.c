@@ -1835,7 +1835,7 @@ EbErrorType Av1FullCost(
         }
     }
 
-#if ATB_RATE_UPGRADE_1
+#if ENHANCE_ATB
     uint64_t tx_size_bits = 0;
     if (picture_control_set_ptr->parent_pcs_ptr->frm_hdr.tx_mode == TX_MODE_SELECT)
         tx_size_bits = get_tx_size_bits(
@@ -1850,7 +1850,7 @@ EbErrorType Av1FullCost(
     // Coeff rate
 
     if (context_ptr->blk_skip_decision && candidate_buffer_ptr->candidate_ptr->type != INTRA_MODE) {
-#if ATB_RATE_UPGRADE_1
+#if ENHANCE_ATB
         uint64_t non_skip_cost = RDCOST(lambda, (*y_coeff_bits + *cb_coeff_bits + *cr_coeff_bits + tx_size_bits + (uint64_t)candidate_buffer_ptr->candidate_ptr->md_rate_estimation_ptr->skip_fac_bits[cu_ptr->skip_coeff_context][0]), (y_distortion[0] + cb_distortion[0] + cr_distortion[0]));
 #else
         uint64_t non_skip_cost = RDCOST(lambda, (*y_coeff_bits + *cb_coeff_bits + *cr_coeff_bits + (uint64_t)candidate_buffer_ptr->candidate_ptr->md_rate_estimation_ptr->skip_fac_bits[cu_ptr->skip_coeff_context][0]), (y_distortion[0] + cb_distortion[0] + cr_distortion[0]));
@@ -1875,11 +1875,10 @@ EbErrorType Av1FullCost(
     totalDistortion = luma_sse + chromaSse;
 
     rate = lumaRate + chromaRate + coeffRate;
-#if ATB_RATE_UPGRADE_1
+#if ENHANCE_ATB
     if (candidate_buffer_ptr->candidate_ptr->block_has_coeff)
         rate += tx_size_bits;
 #endif
-
     // Assign full cost
     *(candidate_buffer_ptr->full_cost_ptr) = RDCOST(lambda, rate, totalDistortion);
 
@@ -1988,7 +1987,7 @@ EbErrorType  Av1MergeSkipFullCost(
     mergeRate += candidate_buffer_ptr->candidate_ptr->fast_chroma_rate;
 
     mergeRate += coeffRate;
-#if ATB_RATE_UPGRADE_1
+#if ENHANCE_ATB
     uint64_t tx_size_bits = 0;
     if (picture_control_set_ptr->parent_pcs_ptr->frm_hdr.tx_mode == TX_MODE_SELECT)
         tx_size_bits = get_tx_size_bits(

@@ -270,7 +270,7 @@ extern "C" {
         uint64_t                       *full_cost_merge_ptr
     );
 
-#if ATB_INTER_SUPPORT
+#if ENHANCE_ATB
     extern EbErrorType mode_decision_scratch_candidate_buffer_ctor(
         ModeDecisionCandidateBuffer    *buffer_ptr,
         EbBitDepthEnum                  max_bitdepth
