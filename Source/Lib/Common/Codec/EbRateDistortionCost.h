@@ -220,6 +220,15 @@ extern "C" {
         uint64_t                                 *cr_coeff_bits,
         BlockSize                                bsize);
 
+#if ENHANCE_ATB
+    extern uint64_t get_tx_size_bits(
+        ModeDecisionCandidateBuffer          *candidateBuffer,
+        ModeDecisionContext                  *context_ptr,
+        PictureControlSet                    *picture_control_set_ptr,
+        uint8_t                               tx_depth,
+        EbBool                                block_has_coeff,
+        EbBool                                is_inter);
+#endif
 #ifdef __cplusplus
 }
 #endif
