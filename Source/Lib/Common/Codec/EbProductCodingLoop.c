@@ -3627,7 +3627,6 @@ uint8_t get_end_tx_depth(BlockSize bsize, uint8_t btype) {
 uint8_t allowed_tx_set_a[TX_SIZES_ALL][TX_TYPES];
 
 void tx_initialize_neighbor_arrays(
-    SequenceControlSet           *sequence_control_set_ptr,
     PictureControlSet            *picture_control_set_ptr,
     ModeDecisionContext          *context_ptr,
     EbBool                       is_inter) {
@@ -3681,12 +3680,11 @@ void tx_update_neighbor_arrays(
 
 
 void tx_reset_neighbor_arrays(
-    SequenceControlSet           *sequence_control_set_ptr,
-    PictureControlSet            *picture_control_set_ptr,
-    ModeDecisionContext          *context_ptr,
-    ModeDecisionCandidateBuffer  *candidate_buffer,
-    EbBool                        is_inter,
-    uint8_t                       end_tx_depth) {
+    SequenceControlSet  *sequence_control_set_ptr,
+    PictureControlSet   *picture_control_set_ptr,
+    ModeDecisionContext *context_ptr,
+    EbBool               is_inter,
+    uint8_t              end_tx_depth) {
 
     if (end_tx_depth) {
         if (!is_inter)
@@ -3725,12 +3723,10 @@ void tx_type_search(
     TxType txk_start = DCT_DCT;
     TxType txk_end = TX_TYPES;
     uint64_t best_cost_tx_search = (uint64_t)~0;
-    int32_t plane = 0;
     int32_t tx_type;
     TxSize txSize = context_ptr->blk_geom->txsize[context_ptr->tx_depth][context_ptr->txb_itr];
     int32_t is_inter = (candidate_buffer->candidate_ptr->type == INTER_MODE || candidate_buffer->candidate_ptr->use_intrabc) ? EB_TRUE : EB_FALSE;
     const TxSetType tx_set_type = get_ext_tx_set_type(txSize, is_inter, picture_control_set_ptr->parent_pcs_ptr->tx_search_reduced_set);
-    int32_t allowed_tx_mask[TX_TYPES] = { 0 };  // 1: allow; 0: skip.
     int32_t allowed_tx_num = 0;
 
     uint8_t txb_origin_x = (uint8_t)context_ptr->blk_geom->tx_org_x[context_ptr->tx_depth][context_ptr->txb_itr];
@@ -4364,13 +4360,6 @@ uint64_t get_tx_size_bits(
 
     uint64_t tx_size_bits = 0;
 
-    uint32_t txfm_context_left_index = get_neighbor_array_unit_left_index(
-        context_ptr->txfm_context_array,
-        context_ptr->cu_origin_y);
-    uint32_t txfm_context_above_index = get_neighbor_array_unit_top_index(
-        context_ptr->txfm_context_array,
-        context_ptr->cu_origin_x);
-
     tx_size_bits = estimate_tx_size_bits(
         picture_control_set_ptr,
         context_ptr,
@@ -4456,7 +4445,6 @@ void tx_partitioning_path(
         sequence_control_set_ptr,
         picture_control_set_ptr,
         context_ptr,
-        candidate_buffer,
         is_inter,
         end_tx_depth);
 
@@ -4468,7 +4456,6 @@ void tx_partitioning_path(
         tx_candidate_buffer->candidate_ptr->tx_depth = context_ptr->tx_depth;
 
         tx_initialize_neighbor_arrays(
-            sequence_control_set_ptr,
             picture_control_set_ptr,
             context_ptr,
             is_inter);
